@@ -4,7 +4,16 @@
 \alias{accuracy.default}
 \title{Accuracy measures for a forecast model}
 \usage{
-\method{accuracy}{default}(object, x, test = NULL, d = NULL, D = NULL, f = NULL, ...)
+\method{accuracy}{default}(
+  object,
+  x,
+  test = NULL,
+  d = NULL,
+  D = NULL,
+  f = NULL,
+  custom_error = NULL,
+  ...
+)
 }
 \arguments{
 \item{object}{An object of class \dQuote{\code{forecast}}, or a numerical vector
@@ -29,6 +38,11 @@ series and 1 for seasonal series.}
 
 \item{f}{Deprecated. Please use `object` instead.}
 
+\item{custom_error}{A function that calculates a custom error measure. The function
+should take true and predicted values as inputs (in that order) and return a 
+single numeric value.
+Default is \code{NULL}.}
+
 \item{...}{Additional arguments depending on the specific method.}
 }
 \value{
@@ -51,7 +65,7 @@ The measures calculated are:
   \item MPE: Mean Percentage Error
   \item MAPE: Mean Absolute Percentage Error
   \item MASE: Mean Absolute Scaled Error
-  \item ACF1: Autocorrelation of errors at lag 1.
+  \item ACF1: Autocorrelation of errors at lag 1
 }
 By default, the MASE calculation is scaled using MAE of training set naive
 forecasts for non-seasonal time series, training set seasonal naive forecasts
@@ -68,7 +82,10 @@ fit1 <- rwf(EuStockMarkets[1:200, 1], h = 100)
 fit2 <- meanf(EuStockMarkets[1:200, 1], h = 100)
 accuracy(fit1)
 accuracy(fit2)
+custom_error <- function(x, y) sum(abs(x - y), na.rm = TRUE)
+accuracy(fit1, custom_error = custom_error)
 accuracy(fit1, EuStockMarkets[201:300, 1])
+accuracy(fit1, EuStockMarkets[201:300, 1], custom_error = custom_error)
 accuracy(fit2, EuStockMarkets[201:300, 1])
 plot(fit1)
 lines(EuStockMarkets[1:300, 1])

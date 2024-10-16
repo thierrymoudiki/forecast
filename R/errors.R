@@ -20,13 +20,7 @@ testaccuracy <- function(f, x, test, d, D, custom_error=NULL) {
       f <- f$mean
     } else {
       stop("Unknown list structure")
-    }
-    if (is.element("lower", names(f))) {
-      f_lower <- f$lower
-    }
-    if (is.element("upper", names(f))) {
-      f_upper <- f$upper
-    } 
+    }    
   }
   if (is.ts(x) && is.ts(f)) {
     tspf <- tsp(f)
@@ -37,13 +31,7 @@ testaccuracy <- function(f, x, test, d, D, custom_error=NULL) {
     start <- min(start, end)
     end <- max(start, end)
     f <- window(f, start = start, end = end)
-    x <- window(x, start = start, end = end)
-    if (f_lower && f_upper) {
-    if (is.ts(f_lower) && is.ts(f_upper)) {
-      f_lower <- window(f_lower, start = start, end = end)
-      f_upper <- window(f_upper, start = start, end = end)
-      }
-    }
+    x <- window(x, start = start, end = end)    
   }
   
   n <- length(x)
