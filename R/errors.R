@@ -5,7 +5,7 @@
 ## test enables a subset of x and f to be tested.
 # MASE: d is the # of differencing
 # MASE: D is the # of seasonal differencing
-testaccuracy <- function(f, x, test, d, D) {
+testaccuracy <- function(f, x, test, d, D, custom_error=NULL) {
   dx <- getResponse(f)
   if (is.data.frame(x)) {
     responsevar <- as.character(formula(f$model))[2]
@@ -21,6 +21,12 @@ testaccuracy <- function(f, x, test, d, D) {
     } else {
       stop("Unknown list structure")
     }
+    if (is.element("lower", names(f))) {
+      f_lower <- f$lower
+    }
+    if (is.element("upper", names(f))) {
+      f_upper <- f$upper
+    } 
   }
   if (is.ts(x) && is.ts(f)) {
     tspf <- tsp(f)
@@ -32,7 +38,14 @@ testaccuracy <- function(f, x, test, d, D) {
     end <- max(start, end)
     f <- window(f, start = start, end = end)
     x <- window(x, start = start, end = end)
+    if (f_lower && f_upper) {
+    if (is.ts(f_lower) && is.ts(f_upper)) {
+      f_lower <- window(f_lower, start = start, end = end)
+      f_upper <- window(f_upper, start = start, end = end)
+      }
+    }
   }
+  
   n <- length(x)
   if (is.null(test)) {
     test <- 1:n
@@ -57,8 +70,14 @@ testaccuracy <- function(f, x, test, d, D) {
   mae <- mean(abs(error), na.rm = TRUE)
   mape <- mean(abs(pe), na.rm = TRUE)
   mpe <- mean(pe, na.rm = TRUE)
-  out <- c(me, sqrt(mse), mae, mpe, mape)
-  names(out) <- c("ME", "RMSE", "MAE", "MPE", "MAPE")
+  if (!is.null(custom_error)) {   
+    customerror <- custom_error(xx[test], ff[1:n][test])         
+    out <- c(me, sqrt(mse), mae, mpe, mape, customerror)
+    names(out) <- c("ME", "RMSE", "MAE", "MPE", "MAPE", "CustomError")
+  } else {
+    out <- c(me, sqrt(mse), mae, mpe, mape)  
+    names(out) <- c("ME", "RMSE", "MAE", "MPE", "MAPE")
+  }  
 
   # Compute MASE if historical data available
   if (!is.null(dx)) {
@@ -101,7 +120,7 @@ testaccuracy <- function(f, x, test, d, D) {
   return(out)
 }
 
-trainingaccuracy <- function(f, test, d, D) {
+trainingaccuracy <- function(f, test, d, D, custom_error=NULL) {
   # Make sure x is an element of f when f is a fitted model rather than a forecast
   # if(!is.list(f))
   #  stop("f must be a forecast object or a time series model object.")
@@ -133,8 +152,18 @@ trainingaccuracy <- function(f, test, d, D) {
   mae <- mean(abs(res), na.rm = TRUE)
   mape <- mean(abs(pe), na.rm = TRUE)
   mpe <- mean(pe, na.rm = TRUE)
-  out <- c(me, sqrt(mse), mae, mpe, mape)
-  names(out) <- c("ME", "RMSE", "MAE", "MPE", "MAPE")
+  if (!is.null(custom_error)) {    
+    misc::debug_print(dx)
+    misc::debug_print(fits)
+    misc::debug_print(dx[test])
+    misc::debug_print(fits[test])
+    customerror <- custom_error(dx[test], fits[test])
+    out <- c(me, sqrt(mse), mae, mpe, mape, customerror)
+    names(out) <- c("ME", "RMSE", "MAE", "MPE", "MAPE", "CustomError")
+  } else {
+    out <- c(me, sqrt(mse), mae, mpe, mape)  
+    names(out) <- c("ME", "RMSE", "MAE", "MPE", "MAPE")
+  }
 
   # Compute MASE if historical data available
   if (!is.null(dx)) {
@@ -191,7 +220,7 @@ trainingaccuracy <- function(f, test, d, D) {
 #'   \item MPE: Mean Percentage Error
 #'   \item MAPE: Mean Absolute Percentage Error
 #'   \item MASE: Mean Absolute Scaled Error
-#'   \item ACF1: Autocorrelation of errors at lag 1.
+#'   \item ACF1: Autocorrelation of errors at lag 1
 #' }
 #' By default, the MASE calculation is scaled using MAE of training set naive
 #' forecasts for non-seasonal time series, training set seasonal naive forecasts
@@ -217,6 +246,10 @@ trainingaccuracy <- function(f, test, d, D) {
 #' @param D An integer indicating the number of seasonal differences to be used
 #' for the denominator in MASE calculation. Default value is 0 for non-seasonal
 #' series and 1 for seasonal series.
+#' @param custom_error A function that calculates a custom error measure. The function
+#' should take true and predicted values as inputs (in that order) and return a 
+#' single numeric value.
+#' Default is \code{NULL}.
 #' @param ... Additional arguments depending on the specific method.
 #' @param f Deprecated. Please use `object` instead.
 #' @return Matrix giving forecast accuracy measures.
@@ -236,12 +269,15 @@ trainingaccuracy <- function(f, test, d, D) {
 #' fit2 <- meanf(EuStockMarkets[1:200, 1], h = 100)
 #' accuracy(fit1)
 #' accuracy(fit2)
+#' custom_error <- function(x, y) sum(abs(x - y), na.rm = TRUE)
+#' accuracy(fit1, custom_error = custom_error)
 #' accuracy(fit1, EuStockMarkets[201:300, 1])
+#' accuracy(fit1, EuStockMarkets[201:300, 1], custom_error = custom_error)
 #' accuracy(fit2, EuStockMarkets[201:300, 1])
 #' plot(fit1)
 #' lines(EuStockMarkets[1:300, 1])
 #' @export
-accuracy.default <- function(object, x, test = NULL, d = NULL, D = NULL, f = NULL, ...) {
+accuracy.default <- function(object, x, test = NULL, d = NULL, D = NULL, f = NULL, custom_error = NULL, ...) {
   if (!is.null(f)) {
     warning("Using `f` as the argument for `accuracy()` is deprecated. Please use `object` instead.")
     object <- f
@@ -288,14 +324,14 @@ accuracy.default <- function(object, x, test = NULL, d = NULL, D = NULL, f = NUL
   }
 
   if (trainset) {
-    trainout <- trainingaccuracy(object, test, d, D)
+    trainout <- trainingaccuracy(object, test, d, D, custom_error)
     trainnames <- names(trainout)
   }
   else {
     trainnames <- NULL
   }
   if (testset) {
-    testout <- testaccuracy(object, x, test, d, D)
+    testout <- testaccuracy(object, x, test, d, D, custom_error)
     testnames <- names(testout)
   }
   else {
